@@ -1,0 +1,3 @@
+[submodule "robustified/atari_reset"]
+	path = robustified/atari_reset
+	url = https://github.com/uber-research/atari-reset
