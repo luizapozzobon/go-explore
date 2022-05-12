@@ -1,0 +1,3 @@
+name: go-explore-seed
+dependencies:
+        - python=3.6
