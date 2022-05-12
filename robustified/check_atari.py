@@ -3,6 +3,7 @@ import argparse
 import os
 import gym
 import numpy as np
+from check_atari_env_seed import test_env_seed
 
 def test(args):
     import filelock
@@ -22,10 +23,10 @@ def test(args):
     set_global_seeds(hvd.rank())
     from baselines import bench
     from baselines.common import set_global_seeds
-    from atari_reset.wrappers import VecFrameStack, VideoWriter, my_wrapper,\
+    from atari_reset.atari_reset.wrappers import VecFrameStack, VideoWriter, my_wrapper,\
         EpsGreedyEnv, StickyActionEnv, NoopResetEnv, SubprocVecEnv, PreventSlugEnv, FetchSaveEnv, TanhWrap
-    from atari_reset.ppo import learn
-    from atari_reset.policies import CnnPolicy, GRUPolicy, FFPolicy
+    from atari_reset.atari_reset.ppo import learn
+    from atari_reset.atari_reset.policies import CnnPolicy, GRUPolicy, FFPolicy
 
     set_global_seeds(hvd.rank())
     ncpu = 2
@@ -162,6 +163,35 @@ if __name__ == '__main__':
     parser.add_argument('--fetch_state_wh', type=int, default=96)
     parser.add_argument('--nsteps', type=int, default=256)
     parser.add_argument('--ffmemsize', type=int, default=800)
+
+    # Env seed experiments
+    parser.add_argument(
+        "--patch-env-seed",
+        type=lambda x: bool(strtobool(x)),
+        default=False,
+        nargs="?",
+        const=True,
+        help="if toggled, the seed of the environment will be changed to the one provided by the user",
+    )
+    parser.add_argument(
+        "--env-seeds",
+        nargs="+",
+        default=[None],  # [1, 10, 42, 60],
+        help="a list of seeds for the experiment's environment (applied if `patch-env-seed == True`)",
+    )
+    parser.add_argument(
+        "--test-seeds",
+        nargs="+",
+        default=["9", "18", "50"],
+        help="a list of seed for testing the agent",
+    )
+    parser.add_argument(
+        "--test-episodes",
+        type=int,
+        default=20,
+        help="the number of test episodes per `test_seed`",
+    )
+
     args = parser.parse_args()
 
     if args.fetch_total_timestep is not None:
@@ -171,9 +201,9 @@ if __name__ == '__main__':
 
     # assert not os.path.exists(args.save_path)
 
-    import atari_reset.policies
-    atari_reset.policies.FFSHAPE = args.ffshape
-    atari_reset.policies.MEMSIZE = args.ffmemsize
+    import atari_reset.atari_reset.policies
+    atari_reset.atari_reset.policies.FFSHAPE = args.ffshape
+    atari_reset.atari_reset.policies.MEMSIZE = args.ffmemsize
 
 
     def check_done():
@@ -190,5 +220,10 @@ if __name__ == '__main__':
             n_to_consider += 1
         return all([('score' in e) for e in all_episodes[:n_to_consider]])
 
-    if not check_done():
-        test(args)
+    if args.patch_env_seed:
+        print("Running environment seed patch testing.")
+        test_env_seed(args)
+    else:
+        print("Running default go-explore testing.")
+        if not check_done():
+            test(args)

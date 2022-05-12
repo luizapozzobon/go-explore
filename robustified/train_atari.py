@@ -4,10 +4,28 @@ import os
 import numpy as np
 import itertools
 
-# import sys
+import sys
+from pathlib import Path
 # sys.path.append('/home/work')
 # import goexplore_py.complex_fetch_env
+
+SRC_DIR = Path(__file__).resolve().parents[3]
+print(SRC_DIR)
+sys.path.append(str(SRC_DIR))
+
 from baselines import logger
+
+import gym
+import atari_py
+from atari_env_seed_wrapper.atari_seed_wrapper import patch_atari_seed
+
+def reboot_env(game, seed):
+    global atari_py
+    atari_py = patch_atari_seed(atari_py, seed, game)
+
+    env = gym.make(game + "NoFrameskip-v4")
+    return env
+
 
 def discounted_rewards(rewards, gamma):
     results = [0.0] * len(rewards)
@@ -88,9 +106,9 @@ def train(args, extra_data):
     json.dump(vars(args), open(args.save_path + '/kwargs.json', 'w'), indent=True, sort_keys=True)
     from baselines.common import set_global_seeds
     set_global_seeds(hvd.rank())
-    from atari_reset.ppo import learn
-    from atari_reset.policies import CnnPolicy, GRUPolicy, FFPolicy, FetchCNNPolicy
-    from atari_reset.wrappers import ReplayResetEnv, ResetManager, SubprocVecEnv, VideoWriter, VecFrameStack, SuperDumbVenvWrapper, my_wrapper, MyResizeFrame, WarpFrame, MyResizeFrameOld, TanhWrap, SubprocWrapper, prepare_subproc
+    from atari_reset.atari_reset.ppo import learn
+    from atari_reset.atari_reset.policies import CnnPolicy, GRUPolicy, FFPolicy, FetchCNNPolicy
+    from atari_reset.atari_reset.wrappers import ReplayResetEnv, ResetManager, SubprocVecEnv, VideoWriter, VecFrameStack, SuperDumbVenvWrapper, my_wrapper, MyResizeFrame, WarpFrame, MyResizeFrameOld, TanhWrap, SubprocWrapper, prepare_subproc
 
     if args.frame_resize == "MyResizeFrame":
         frame_resize_wrapper = MyResizeFrame
@@ -118,7 +136,7 @@ def train(args, extra_data):
 
     subproc_data = None
 
-    def make_env(rank, is_extra_sil, subproc_idx):
+    def make_env(rank, is_extra_sil, subproc_idx, args):
         # print('WOW', rank, is_extra_sil)
         def env_fn():
             if args.game == 'fetch':
@@ -138,7 +156,41 @@ def train(args, extra_data):
             elif args.game == 'fetch_dumb':
                 env = goexplore_py.dumb_fetch_env.ComplexFetchEnv(incl_extra_full_state=args.fetch_incl_extra_full_state)
             else:
-                env = gym.make(args.game + 'NoFrameskip-v4')
+                # FIXME do not hardcode env seed to index 0
+                if args.patch_env_seed:
+                    env = reboot_env(
+                        game=args.game,
+                        seed=args.env_seeds[0],
+                    )
+                else:
+                    env = gym.make(args.game + 'NoFrameskip-v4')
+
+
+            # FIXME pass debug as an argument
+            debug = False
+            if debug:
+                import time
+                NUM_STEPS = 500
+                env.reset()
+                for step in range(NUM_STEPS):
+                    # samples random action
+                    action = env.action_space.sample()
+
+                    # apply the action
+                    obs, reward, done, info = env.step(action)
+
+                    env.render()
+
+                    # Wait a bit before the next frame unless you want to see a crazy fast video
+                    time.sleep(0.01)
+
+                    # If the epsiode is up, then start another one
+                    if done:
+                        env.reset()
+
+                # Close the env
+                env.close()
+
             env = ReplayResetEnv(env,
                                  args,
                                  seed=rank,
@@ -170,7 +222,7 @@ def train(args, extra_data):
         # For cases where we start from the beginning
         # env_types += [(0, True)] * n_sil_envs
 
-    env = SubprocVecEnv([make_env(i + args.nenvs * hvd.rank(), is_extra_sil, subproc_idx) for subproc_idx, (i, is_extra_sil) in enumerate(env_types)])
+    env = SubprocVecEnv([make_env(i + args.nenvs * hvd.rank(), is_extra_sil, subproc_idx, args) for subproc_idx, (i, is_extra_sil) in enumerate(env_types)])
     env = ResetManager(env, move_threshold=args.move_threshold, steps_per_demo=args.steps_per_demo, fast_increase_starting_point=args.fast_increase_starting_point)
     if args.starting_points is not None:
         for i, e in enumerate(args.starting_points.split(',')):
@@ -354,6 +406,22 @@ if __name__ == '__main__':
     add_argument('--fetch_type', type=str, default='boxes')
     add_argument('--fetch_target_location', type=str, default=None)
     add_argument('--fetch_state_wh', type=int, default=96)
+
+    # Env seed experiments
+    parser.add_argument(
+        "--patch-env-seed",
+        type=lambda x: bool(strtobool(x)),
+        default=False,
+        nargs="?",
+        const=True,
+        help="if toggled, the seed of the environment will be changed to the one provided by the user",
+    )
+    add_argument(
+        "--env-seeds",
+        nargs="+",
+        default=[None],
+        help="a list of seeds for the experiment's environment (applied if `patch-env-seed == True`)",
+    )
     args = parser.parse_args()
 
     args.im_cells = None
@@ -364,10 +432,10 @@ if __name__ == '__main__':
     if 'fetch' in args.game:
         args.noops = False
 
-    import atari_reset.policies
-    atari_reset.policies.FFSHAPE = args.ffshape
-    atari_reset.policies.SD_MULTIPLY_EXPLORE = args.sd_multiply_explore
-    atari_reset.policies.MEMSIZE = args.ffmemsize
+    import atari_reset.atari_reset.policies
+    atari_reset.atari_reset.policies.FFSHAPE = args.ffshape
+    atari_reset.atari_reset.policies.SD_MULTIPLY_EXPLORE = args.sd_multiply_explore
+    atari_reset.atari_reset.policies.MEMSIZE = args.ffmemsize
 
     assert not args.autoload_path or not args.load_path, 'Autoload path and load path are mutually exclusive'
     assert not args.autoload_path or not args.starting_points, 'Autoload path and starting points are mutually exclusive'
