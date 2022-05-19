@@ -4,7 +4,7 @@ import os
 import numpy as np
 import itertools
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 import sys
 from pathlib import Path
@@ -20,8 +20,6 @@ from baselines import logger
 import gym
 import atari_py
 from atari_env_seed_wrapper.atari_seed_wrapper import patch_atari_seed
-
-
 
 def reboot_env(game, seed):
     global atari_py
@@ -86,8 +84,9 @@ def train(args, extra_data):
     import tensorflow as tf
     import horovod.tensorflow as hvd
     hvd.init()
-    print('initialized worker %d' % hvd.rank(), flush=True)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(hvd.local_rank())
     print('device_name: ', tf.test.gpu_device_name())
+    print('initialized worker %d' % hvd.rank(), flush=True)
     if hvd.rank() == 0:
         while os.path.exists(args.save_path + '/progress.csv'):
             while args.save_path[-1] == '/':
@@ -132,13 +131,13 @@ def train(args, extra_data):
     else:
         raise NotImplementedError("No such frame-size wrapper: " + args.frame_resize)
     ncpu = 2
-    # https://stackoverflow.com/questions/41233635/meaning-of-inter-op-parallelism-threads-and-intra-op-parallelism-threads
     config = tf.ConfigProto(allow_soft_placement=True,
-                            log_device_placement=True,)
-                            # intra_op_parallelism_threads=ncpu,
-                            # inter_op_parallelism_threads=ncpu)
-    config.gpu_options.allow_growth = True
-    config.gpu_options.visible_device_list = str(hvd.local_rank())
+                            log_device_placement=True,
+                            intra_op_parallelism_threads=ncpu,
+                            inter_op_parallelism_threads=ncpu)
+    # config.gpu_options.allow_growth = True
+    # config.gpu_options.visible_device_list = str(hvd.local_rank())
+
     tf.Session(config=config).__enter__()
 
     # nrstartsteps = 320  # number of non frameskipped steps to divide workers over
