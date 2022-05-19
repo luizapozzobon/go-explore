@@ -1,3 +1,13 @@
 name: go-explore-seed
+channels:
+        - conda-forge
+        - defaults
 dependencies:
         - python=3.6
+        - jupyterlab
+        - cudatoolkit=10.0
+        - openmpi
+        - cxx-compiler=1.0
+        - gcc_linux-64
+        - nvcc_linux-64=10.1
+        - nccl=2.5
