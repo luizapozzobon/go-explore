@@ -4,6 +4,8 @@ import os
 import numpy as np
 import itertools
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import sys
 from pathlib import Path
 # sys.path.append('/home/work')
@@ -18,6 +20,8 @@ from baselines import logger
 import gym
 import atari_py
 from atari_env_seed_wrapper.atari_seed_wrapper import patch_atari_seed
+
+
 
 def reboot_env(game, seed):
     global atari_py
@@ -62,19 +66,28 @@ def get_mean_reward(demo, fn, frameskip, gamma):
 PROCS = []
 
 def train(args, extra_data):
+
     import filelock
     with filelock.FileLock('/tmp/robotstify.lock'):
         import gym
         import sys
         try:
-            import goexplore_py.complex_fetch_env
+            # import goexplore_py.complex_fetch_env
+            # FIXME segmentation fault if this is not done prior to tf and horovod imports
+            pass
         except Exception:
             print('Could not import complex_fetch_env, is goexplore_py in PYTHONPATH?')
+
+    # FIXME segmentation fault if this is not done prior to tf and horovod imports
+    print(0)
+    env = gym.make("RiverraidNoFrameskip-v4")
+    print(1)
 
     import tensorflow as tf
     import horovod.tensorflow as hvd
     hvd.init()
     print('initialized worker %d' % hvd.rank(), flush=True)
+    print('device_name: ', tf.test.gpu_device_name())
     if hvd.rank() == 0:
         while os.path.exists(args.save_path + '/progress.csv'):
             while args.save_path[-1] == '/':
@@ -119,9 +132,11 @@ def train(args, extra_data):
     else:
         raise NotImplementedError("No such frame-size wrapper: " + args.frame_resize)
     ncpu = 2
+    # https://stackoverflow.com/questions/41233635/meaning-of-inter-op-parallelism-threads-and-intra-op-parallelism-threads
     config = tf.ConfigProto(allow_soft_placement=True,
-                            intra_op_parallelism_threads=ncpu,
-                            inter_op_parallelism_threads=ncpu)
+                            log_device_placement=True,)
+                            # intra_op_parallelism_threads=ncpu,
+                            # inter_op_parallelism_threads=ncpu)
     config.gpu_options.allow_growth = True
     config.gpu_options.visible_device_list = str(hvd.local_rank())
     tf.Session(config=config).__enter__()
@@ -164,7 +179,6 @@ def train(args, extra_data):
                     )
                 else:
                     env = gym.make(args.game + 'NoFrameskip-v4')
-
 
             # FIXME pass debug as an argument
             debug = False
@@ -214,6 +228,7 @@ def train(args, extra_data):
                 env = TanhWrap(env)
             return env
         return env_fn
+
 
     env_types = [(i, False) for i in range(args.nenvs)]
     if args.n_sil_envs:
@@ -486,5 +501,6 @@ if __name__ == '__main__':
             args.starting_points = ','.join(str(e) for _, e in starting_points)
             assert [e for e, _ in starting_points] == list(range(len(starting_points)))
             print('Using starting points:', args.starting_points)
+
 
     train(args, extra_data)
