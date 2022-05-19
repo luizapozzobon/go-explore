@@ -68,7 +68,7 @@ def test(args):
                 # env = PreventSlugEnv(env)
             # change for long runs
             # env._max_episode_steps *= 1000
-            env = bench.Monitor(env, "{}.monitor.json".format(rank), allow_early_resets=True)
+            env = bench.Monitor(env, args.save_path + "/{}.monitor.json".format(rank), allow_early_resets=True)
             if False and rank%nenvs == 0 and hvd.local_rank()==0:
                 os.makedirs(args.save_path + '/vids/' + args.game, exist_ok=True)
                 videofile_prefix = args.save_path + '/vids/' + args.game
@@ -126,6 +126,7 @@ def test(args):
     args.save_interval = 100
     args.subtract_rew_avg = True
     args.clip_rewards = False
+
     learn(env, args, True)
     # learn(policy=policy, env=env, nsteps=256, log_interval=1, save_interval=100, total_timesteps=args.num_timesteps,
     #       load_path=args.load_path, save_path=args.save_path, game_name=args.game, test_mode=True, max_noops=max_noops)

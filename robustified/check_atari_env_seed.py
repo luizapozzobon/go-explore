@@ -48,30 +48,7 @@ def test_env_seed(args):
     config.gpu_options.visible_device_list = str(hvd.local_rank())
     tf.Session(config=config).__enter__()
 
-    max_noops = 30 if args.noops else 0
     print("SAVE PATH", args.save_path)
-
-    args.policy = {"cnn": CnnPolicy, "gru": GRUPolicy}[args.policy]
-
-    args.sil_pg_weight_by_value = False
-    args.sil_vf_relu = False
-    args.sil_vf_coef = 0
-    args.sil_coef = 0
-    args.sil_ent_coef = 0
-    args.ent_coef = 0
-    args.vf_coef = 0
-    args.cliprange = 1
-    args.l2_coef = 0
-    args.adam_epsilon = 1e-8
-    args.gamma = 0.99
-    args.lam = 0.10
-    args.scale_rewards = 1.0
-    args.sil_weight_success_rate = True
-    args.norm_adv = 1.0
-    args.log_interval = 1
-    args.save_interval = 100
-    args.subtract_rew_avg = True
-    args.clip_rewards = False
 
     def make_env(rank, args, seed=None):
         def env_fn():
@@ -147,6 +124,30 @@ def test_env_seed(args):
             [make_env(i + nenvs * hvd.rank(), args, seed=test_seed) for i in range(nenvs)]
         )
         env = VecFrameStack(env, 4)
+
+        args.policy = {"cnn": CnnPolicy, "gru": GRUPolicy}[args.policy]
+
+        args.sil_pg_weight_by_value = False
+        args.sil_vf_relu = False
+        args.sil_vf_coef = 0
+        args.sil_coef = 0
+        args.sil_ent_coef = 0
+        args.ent_coef = 0
+        args.vf_coef = 0
+        args.cliprange = 1
+        args.l2_coef = 0
+        args.adam_epsilon = 1e-8
+        args.gamma = 0.99
+        args.lam = 0.10
+        args.scale_rewards = 1.0
+        args.sil_weight_success_rate = True
+        args.norm_adv = 1.0
+        args.log_interval = 1
+        args.save_interval = 100
+        args.subtract_rew_avg = True
+        args.clip_rewards = False
+
+        print(args)
 
         learn(env, args, True)
 
