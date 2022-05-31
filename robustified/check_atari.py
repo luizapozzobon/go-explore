@@ -44,7 +44,7 @@ def test_env_seed(args):
 
     ncpu = 2
     config = tf.ConfigProto(allow_soft_placement=True,
-                            log_device_placement=True,
+                            # log_device_placement=True,
                             intra_op_parallelism_threads=ncpu,
                             inter_op_parallelism_threads=ncpu)
     # config.gpu_options.allow_growth = True
@@ -97,9 +97,8 @@ def test_env_seed(args):
                 # Close the env
                 env.close()
 
-            env = bench.Monitor(
-                env, "{}.monitor.json".format(rank), allow_early_resets=True
-            )
+            os.makedirs(args.save_path, exist_ok=True)
+            env = bench.Monitor(env, args.save_path + "/{}.monitor.json".format(rank), allow_early_resets=True)
             if False and rank % nenvs == 0 and hvd.local_rank() == 0:
                 os.makedirs(args.save_path + "/vids/" + args.game, exist_ok=True)
                 videofile_prefix = args.save_path + "/vids/" + args.game
@@ -184,7 +183,7 @@ def test(args):
 
     ncpu = 2
     config = tf.ConfigProto(allow_soft_placement=True,
-                            log_device_placement=True,
+                            # log_device_placement=True,
                             intra_op_parallelism_threads=ncpu,
                             inter_op_parallelism_threads=ncpu)
     # config.gpu_options.allow_growth = True
@@ -222,6 +221,9 @@ def test(args):
                 # env = PreventSlugEnv(env)
             # change for long runs
             # env._max_episode_steps *= 1000
+
+            os.makedirs(args.save_path, exist_ok=True)
+
             env = bench.Monitor(env, args.save_path + "/{}.monitor.json".format(rank), allow_early_resets=True)
             if False and rank%nenvs == 0 and hvd.local_rank()==0:
                 os.makedirs(args.save_path + '/vids/' + args.game, exist_ok=True)
